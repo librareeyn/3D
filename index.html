@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>โมเดล 3D โรงไฟฟ้า SMR</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#0d2b52;--panel:rgba(255,255,255,.92);--txt:#0d2b52;--accent:#1c6fd1;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--panel:rgba(14,28,50,.9);--txt:#e8f1ff;--accent:#6fb1ff}}
+html,body{height:100%;margin:0;overflow:hidden;background:#bfe0f7;font-family:'Noto Sans Thai',system-ui,sans-serif;color:var(--txt)}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#c:active{cursor:grabbing}
+.title{position:fixed;left:12px;top:calc(12px + env(safe-area-inset-top,0px));background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;max-width:70vw}
+.title b{font-size:20px;display:block}.title span{font-size:12px;opacity:.85}
+.bar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));display:flex;flex-wrap:wrap;gap:6px;justify-content:center;background:var(--panel);padding:8px;border-radius:14px;box-shadow:0 4px 18px rgba(0,0,0,.25);max-width:calc(100vw - 20px)}
+button{font:600 13px 'Noto Sans Thai',sans-serif;border:1px solid var(--accent);background:transparent;color:var(--txt);padding:8px 12px;border-radius:9px;cursor:pointer}
+button.on,button:hover{background:var(--accent);color:#fff}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.hint{position:fixed;right:12px;top:calc(12px + env(safe-area-inset-top,0px));background:var(--panel);padding:8px 12px;border-radius:10px;font-size:12px;max-width:34vw}
+.lbl{position:fixed;left:0;top:0;pointer-events:none;background:var(--ink);color:#fff;font-size:12px;font-weight:600;padding:3px 9px;border-radius:7px;white-space:nowrap;border:1px solid #fff5}
+#load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0d2b52;color:#fff;font-size:18px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="title"><b>SMR โรงไฟฟ้านิวเคลียร์ขนาดเล็ก</b><span>Small Modular Reactor Power Plant · โมเดล 3D</span></div>
+<div class="hint">ลากนิ้ว/เมาส์เพื่อหมุน · หยิกหรือเลื่อนล้อเพื่อซูม · ลาก 2 นิ้วเพื่อเลื่อน</div>
+<div class="bar">
+<button data-v="0">หน้า 0°</button><button data-v="90">ขวา 90°</button><button data-v="180">หลัง 180°</button><button data-v="270">ซ้าย 270°</button>
+<button id="top">มุมสูง</button><button id="auto" class="on">หมุนอัตโนมัติ</button><button id="lab" class="on">ป้ายชื่อ</button><button id="rst">รีเซ็ต</button>
+</div>
+<div id="load">กำลังโหลดโมเดล 3D…</div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+const cv=document.getElementById('c');
+const R=new THREE.WebGLRenderer({canvas:cv,antialias:true});
+R.setPixelRatio(Math.min(devicePixelRatio,2));R.shadowMap.enabled=true;R.shadowMap.type=THREE.PCFSoftShadowMap;
+const S=new THREE.Scene();S.background=new THREE.Color(0xbfe0f7);S.fog=new THREE.Fog(0xbfe0f7,260,520);
+const cam=new THREE.PerspectiveCamera(42,1,1,1200);
+const T=new THREE.Vector3(0,8,0);
+const C=new THREE.OrbitControls(cam,cv);C.target.copy(T);C.enableDamping=true;C.dampingFactor=.08;C.maxPolarAngle=Math.PI/2-.03;C.minDistance=40;C.maxDistance=330;C.autoRotate=true;C.autoRotateSpeed=.8;
+S.add(new THREE.HemisphereLight(0xdff0ff,0x6b8a52,.75));
+const sun=new THREE.DirectionalLight(0xfff2dd,.95);sun.position.set(70,110,80);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-100,right:100,top:100,bottom:-100,near:10,far:350});sun.shadow.bias=-.0005;S.add(sun);
+
+const M=(c,o)=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:.85,metalness:.05},o||{}));
+const G=new THREE.Group();S.add(G);
+function add(geo,mat,x,y,z,sh){const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);if(sh!==false){m.castShadow=true;m.receiveShadow=true}G.add(m);return m}
+const box=(w,h,d,x,z,c,y0)=>add(new THREE.BoxGeometry(w,h,d),c.isMaterial?c:M(c),x,(y0||0)+h/2,z);
+const cyl=(r,h,x,z,c,y0,seg)=>add(new THREE.CylinderGeometry(r,r,h,seg||32),c.isMaterial?c:M(c),x,(y0||0)+h/2,z);
+const concrete=M(0xd9dcdf),concrete2=M(0xc4c8cc),roof=M(0xe9ebed),blue=M(0x1c4f96),steel=M(0x8f99a3,{metalness:.5,roughness:.5});
+
+// windows texture
+function winTex(rx,ry){const c=document.createElement('canvas');c.width=64;c.height=64;const x=c.getContext('2d');x.fillStyle='#d9dcdf';x.fillRect(0,0,64,64);x.fillStyle='#4f7fae';x.fillRect(6,20,52,24);x.fillStyle='#ffffff55';x.fillRect(6,20,52,4);const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rx,ry);return t}
+
+// ground / diorama base
+box(160,3,120,0,0,0x5b4a38,-3);
+box(124,.6,120,-18,0,M(0x6fae4f),-.3);
+const water=add(new THREE.BoxGeometry(36,.5,120),M(0x2d7fb8,{roughness:.25,metalness:.2}),62,-.2,0,false);water.receiveShadow=true;
+// roads & parking
+const road=M(0x3d4045);
+function flat(w,d,x,z,c){const m=add(new THREE.BoxGeometry(w,.12,d),c,x,.05,z,false);m.receiveShadow=true;return m}
+flat(4,100,-55,0,road);flat(4,100,55,0,road);flat(110,4,0,-48,road);flat(110,4,0,46,road);flat(5,42,0,26,road);flat(90,4,0,20,road);
+const park=flat(36,14,28,32,M(0x50545a));
+const cc=[0xffffff,0x222831,0x9aa3ad,0x2b5fa8,0xb33a3a];
+for(let i=0;i<12;i++){for(let r=0;r<2;r++){box(1.8,1.2,3.8,12+i*2.7,28+r*8,M(cc[(i*3+r)%5]),.15)}}
+
+// REACTOR
+const rx=-8,rz=-2;
+box(30,15,18,rx,rz-14,concrete);box(14,10,18,-32,-6,concrete2);box(16,12,12,rx+2,rz+12,concrete2);
+cyl(9,26,rx,rz,M(0xe2e4e6,{roughness:.6}),0,48);
+const dome=add(new THREE.SphereGeometry(9,48,16,0,Math.PI*2,0,Math.PI/2),M(0xe2e4e6,{roughness:.6}),rx,26,rz);dome.scale.y=.4;dome.castShadow=true;
+cyl(9.08,1.2,rx,rz,blue,21.5,48);cyl(.25,9,rx,rz,steel,29.5,8);
+// SMR label
+(function(){const c=document.createElement('canvas');c.width=512;c.height=256;const x=c.getContext('2d');x.fillStyle='#e2e4e6';x.fillRect(0,0,512,256);x.fillStyle='#1c4f96';x.font='700 120px sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText('SMR',256,110);x.font='600 26px sans-serif';x.fillText('Small Modular Reactor',256,200);
+const t=new THREE.CanvasTexture(c);const g=new THREE.CylinderGeometry(9.06,9.06,9,32,1,true,-.62,1.24);const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({map:t,roughness:.6}));m.position.set(rx,15,rz);G.add(m)})();
+// tanks
+[[-27,6],[-27,-4]].forEach(p=>{cyl(3,9,p[0],p[1],M(0xdfe3e6),0,20);cyl(3.05,.8,p[0],p[1],blue,6,20)});
+[[-14,10],[-1,10]].forEach(p=>cyl(2.6,10,p[0],p[1],M(0xd0d5d9),0,20));
+
+// TURBINE building + stack
+box(40,16,20,26,-10,concrete);box(38,2,18,26,-10,roof,16);
+const hall=add(new THREE.CylinderGeometry(3.5,3.5,36,20),M(0xb9c0c6,{metalness:.4}),26,17,-2);hall.rotation.z=Math.PI/2;
+cyl(1.4,26,49,-16,M(0xcfd3d6),0,16);
+// pipes reactor -> turbine
+[[3,-3],[3.2,3]].forEach(p=>{const m=add(new THREE.CylinderGeometry(.9,.9,22,14),steel,10,p[0]+2,p[1]-4);m.rotation.z=Math.PI/2});
+// CONTROL building
+box(32,9,16,-4,26,M(0xd9dcdf));box(30,.6,14,-4,26,roof,9);
+[[-4,34.05]].forEach(()=>{const w=box(30,5,.2,-4,34.1,M(0x6f9bc8,{metalness:.3,roughness:.2}),2.2)});
+box(8,7,2,-4,35,M(0x8fb8dd,{metalness:.3,roughness:.15}),0);
+const wt=winTex(6,1);add(new THREE.BoxGeometry(32.2,4,.15),new THREE.MeshStandardMaterial({map:wt}),-4,6.5,33.95,false);
+box(20,6,12,-32,22,concrete2);
+
+// COOLING system
+const cx=51,cz=-8;
+[[-11,-9],[11,-9],[-11,9],[11,9],[0,-9],[0,9]].forEach(p=>box(1,10,1,cx+p[0],cz+p[1],steel));
+box(26,1.4,22,cx,cz,M(0xcfd6dc),10);
+box(26,7,.4,cx,cz-10.8,M(0x6b7681),2);box(26,7,.4,cx,cz+10.8,M(0x6b7681),2);
+const fans=[];
+for(let i=0;i<3;i++)for(let j=0;j<2;j++){const fx=cx-8+i*8,fz=cz-5+j*10;cyl(3.2,2.2,fx,fz,M(0xf1f3f4),11.4,24);fans.push([fx,fz])}
+// steam
+const puffs=[];const pm=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.6,depthWrite:false});
+for(let i=0;i<36;i++){const f=fans[i%6];const m=new THREE.Mesh(new THREE.SphereGeometry(1.6,8,8),pm.clone());m.userData={fx:f[0],fz:f[1],t:Math.random()};G.add(m);puffs.push(m)}
+// intake pipes to water
+const ip=add(new THREE.CylinderGeometry(1,1,16,12),steel,cx+18,3,cz+3);ip.rotation.z=Math.PI/2;
+box(6,1,4,66,cz+3,concrete2,.3);
+
+// SWITCHYARD
+box(28,.2,22,-56,-22,M(0x9c9a92),0);
+for(let i=0;i<4;i++)for(let j=0;j<2;j++){box(3,3.5,3,-64+i*6,-27+j*10,M(0x8a9098),0);cyl(.5,2,-64+i*6,-27+j*10,M(0xd8d8d8),3.5,8)}
+function pylon(x,z,h){const g=new THREE.Group();const m=steel;
+for(const [a,b] of [[-1,-1],[1,-1],[-1,1],[1,1]]){const l=new THREE.Mesh(new THREE.CylinderGeometry(.18,.5,h,6),m);l.position.set(a*.9*.55,h/2,b*.9*.55);l.rotation.z=-a*.05;l.rotation.x=b*.05;l.castShadow=true;g.add(l)}
+[.6,.75,.9].forEach(k=>{const arm=new THREE.Mesh(new THREE.BoxGeometry(k===.6?9:7,.3,.3),m);arm.position.y=h*k;g.add(arm)});
+g.position.set(x,0,z);G.add(g);return g}
+pylon(-70,-4,28);pylon(-70,-38,28);
+for(const y of [.6,.75,.9]){const pts=[new THREE.Vector3(-70,28*y,-4),new THREE.Vector3(-70,28*y-1.5,-21),new THREE.Vector3(-70,28*y,-38)];
+G.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(new THREE.QuadraticBezierCurve3(pts[0],pts[1],pts[2]).getPoints(20)),new THREE.LineBasicMaterial({color:0x333333})))}
+const wire=new THREE.LineBasicMaterial({color:0x444444});
+[[-64,-27],[-46,-27],[-64,-17],[-46,-17]].forEach(p=>G.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(p[0],3.5,p[1]),new THREE.Vector3(-70,20,-21)]),wire)));
+// link to turbine
+G.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-46,3.5,-22),new THREE.Vector3(-20,10,-16),new THREE.Vector3(6,14,-12)]),wire));
+
+// pier & riprap
+box(3,.7,22,64,22,concrete2,.5);box(8,2,6,64,34,concrete,.5);
+const rk=M(0x9a9c9a);for(let i=0;i<70;i++){const r=new THREE.Mesh(new THREE.DodecahedronGeometry(1.1+Math.random()*.6,0),rk);r.position.set(43+ (i>0?0:0)+18.6+Math.random()*1.2,.5,-58+i*1.65);r.castShadow=true;G.add(r)}
+
+// FENCE + gate
+const fm=new THREE.MeshStandardMaterial({color:0x9aa5ad,transparent:true,opacity:.35,side:THREE.DoubleSide,metalness:.4});
+function fence(x1,z1,x2,z2){const L=Math.hypot(x2-x1,z2-z1);const p=new THREE.Mesh(new THREE.PlaneGeometry(L,3),fm);p.position.set((x1+x2)/2,1.8,(z1+z2)/2);p.rotation.y=-Math.atan2(z2-z1,x2-x1);G.add(p);
+const n=Math.round(L/6);for(let i=0;i<=n;i++){const q=new THREE.Mesh(new THREE.CylinderGeometry(.12,.12,3.4,6),steel);q.position.set(x1+(x2-x1)*i/n,1.7,z1+(z2-z1)*i/n);G.add(q)}}
+fence(-74,-56,60,-56);fence(-74,-56,-74,52);fence(-74,52,-6,52);fence(6,52,60,52);fence(60,-56,60,52);
+box(6,4,5,-9,54,M(0xe8eaec));box(6,4,5,9,54,M(0xe8eaec));
+box(.6,3,.6,-3,52,steel);box(.6,3,.6,3,52,steel);
+box(12,5,.6,0,58,M(0xffffff),1.5);cyl(0,0,0,0,0xffffff);G.children.pop();
+(function(){const c=document.createElement('canvas');c.width=512;c.height=160;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,512,160);x.fillStyle='#1c4f96';x.font='700 64px sans-serif';x.textBaseline='middle';x.fillText('SMR',24,50);x.fillStyle='#2e8b57';x.font='600 34px sans-serif';x.fillText('Clean Energy',200,44);x.fillStyle='#1c4f96';x.font='600 34px sans-serif';x.fillText('A Brighter Future',24,115);
+const m=new THREE.Mesh(new THREE.PlaneGeometry(12,3.75),new THREE.MeshStandardMaterial({map:new THREE.CanvasTexture(c)}));m.position.set(0,4,58.4);G.add(m)})();
+
+// TREES (seeded)
+let sd=7;const rnd=()=>(sd=(sd*16807)%2147483647)/2147483647;
+const zones=[[-50,-30,-16,14],[-24,-14,38,10],[-17,-3,-20,9],[0,-15,32,20],[-4,-8,14,26],[-4,26,34,18],[51,-8,30,26],[-56,-22,32,26],[26,-10,44,24],[-32,22,24,14],[28,32,40,18],[0,28,12,40]];
+const tg=new THREE.ConeGeometry(2.4,6,8),trg=new THREE.CylinderGeometry(.3,.4,1.6,6);
+const cols=[0x2f7a3a,0x3f8f43,0x5aa24a];
+let tc=0;while(tc<140){const x=-72+rnd()*132,z=-54+rnd()*104;
+if(zones.some(a=>Math.abs(x-a[0])<a[2]/2+3&&Math.abs(z-a[1])<a[3]/2+3))continue;
+if(Math.abs(x)>53&&Math.abs(x)<57)continue; if(Math.abs(z-46)<4||Math.abs(z+48)<4||Math.abs(z-20)<4)continue; if(x>57)continue;
+const s=.8+rnd()*.7;const cn=new THREE.Mesh(tg,M(cols[tc%3]));cn.position.set(x,(1.6+3)*s,z);cn.scale.setScalar(s);cn.castShadow=true;G.add(cn);
+const tr=new THREE.Mesh(trg,M(0x6b4a2b));tr.position.set(x,.8*s,z);tr.scale.setScalar(s);G.add(tr);tc++}
+// outside fence forest
+for(let i=0;i<60;i++){const x=-88+rnd()*20,z=-58+rnd()*116;const s=1.2+rnd();const cn=new THREE.Mesh(tg,M(cols[i%3]));cn.position.set(x,4*s,z);cn.scale.setScalar(s);cn.castShadow=true;G.add(cn)}
+
+// LABELS
+const L=[['อาคารเครื่องปฏิกรณ์ (Reactor Building)',rx,36,rz],['อาคารกังหัน (Turbine Building)',26,19,-10],['ระบบระบายความร้อน (Cooling System)',cx,15,cz],['ระบบส่งไฟฟ้า (Electrical Grid)',-66,31,-21],['อาคารควบคุม (Control Building)',-4,11,26],['รั้วและประตู (Security)',0,7,54],['ระบบบำบัดน้ำและระบบเสริม (Auxiliary)',-27,11,1]];
+const labs=L.map(a=>{const d=document.createElement('div');d.className='lbl';d.textContent=a[0];document.body.appendChild(d);return {d,p:new THREE.Vector3(a[1],a[2],a[3])}});
+let showL=true;
+
+// VIEWS
+const D0=Math.atan2(0,1);
+function viewPos(deg,el,r){const a=deg*Math.PI/180,e=el*Math.PI/180;return new THREE.Vector3(T.x+Math.sin(a)*Math.cos(e)*r,T.y+Math.sin(e)*r,T.z+Math.cos(a)*Math.cos(e)*r)}
+const home=viewPos(35,28,190);cam.position.copy(home);
+let goal=null;
+function go(v){goal=v;C.autoRotate=false;setOn('auto',false)}
+function setOn(id,v){document.getElementById(id).classList.toggle('on',v)}
+document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>go(viewPos(+b.dataset.v,20,175)));
+document.getElementById('top').onclick=()=>go(viewPos(20,68,200));
+document.getElementById('rst').onclick=()=>{go(home.clone())};
+document.getElementById('auto').onclick=e=>{C.autoRotate=!C.autoRotate;setOn('auto',C.autoRotate)};
+document.getElementById('lab').onclick=()=>{showL=!showL;setOn('lab',showL)};
+cv.addEventListener('pointerdown',()=>{goal=null});
+
+function fit(){const w=innerWidth,h=innerHeight;R.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix()}
+addEventListener('resize',fit);fit();
+
+const clock=new THREE.Clock(),v3=new THREE.Vector3();
+function loop(){requestAnimationFrame(loop);const dt=clock.getDelta();
+if(goal){cam.position.lerp(goal,.08);if(cam.position.distanceTo(goal)<.5)goal=null}
+puffs.forEach(m=>{const u=m.userData;u.t=(u.t+dt*.12)%1;const k=u.t;m.position.set(u.fx+Math.sin(k*9+u.fx)*1.2+k*5,14+k*20,u.fz+Math.cos(k*7)*1.2);m.scale.setScalar(.6+k*2.2);m.material.opacity=.55*(1-k)});
+C.update();R.render(S,cam);
+labs.forEach(l=>{if(!showL){l.d.style.display='none';return}v3.copy(l.p).project(cam);const vis=v3.z<1&&Math.abs(v3.x)<1.05&&Math.abs(v3.y)<1.05;l.d.style.display=vis?'block':'none';
+l.d.style.transform=`translate(${(v3.x*.5+.5)*innerWidth-l.d.offsetWidth/2}px,${(-v3.y*.5+.5)*innerHeight-28}px)`})}
+loop();document.getElementById('load').remove();
+})();
+</script>
+</body>
+</html>
